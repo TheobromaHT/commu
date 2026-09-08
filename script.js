@@ -1,6 +1,6 @@
 const menu = document.querySelector('.menu-toggle');
 const nav = document.querySelector('.desktop-nav');
-const currentFile = location.pathname.split('/').pop() || 'index.html';
+const currentFile = location.pathname.split('/').pop() || 'main.html';
 
 const localFontStylesheet = document.createElement('link');
 localFontStylesheet.rel = 'stylesheet';
@@ -13,7 +13,7 @@ if (nav) {
     <a href="world.html">세계관</a>
     <a href="character-guide.html">캐릭터 가이드</a>
     <a href="system.html">시스템</a>
-    <a href="guests.html">직원</a>
+    <a href="staff.html">직원</a>
   `;
 }
 
