@@ -36,6 +36,9 @@
 
 .guide-grid article:last-child{grid-column:1/-1;min-height:230px}
 
+/* Public staff directory: cards are informational only, with no profile navigation. */
+.staff-public-card{cursor:default;transition:transform .25s ease,background .25s ease,border-color .25s ease}.staff-public-card strong{min-height:0}.staff-public-card:hover{transform:translateY(-6px);background:rgba(255,255,255,.06);border-color:#c9ad78}.staff-public-card:hover img{transform:scale(1.05)}.staff-record-position{display:block;margin-top:10px;padding-top:10px;border-top:1px solid rgba(234,229,218,.2);color:#d5c092;font:500 15px/1.5 'Noto Serif KR',serif}
+
 @media(max-width:760px){
   .guide-grid article:last-child{grid-column:auto}
 }

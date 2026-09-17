@@ -1,14 +1,12 @@
 const GUEST_DIRECTORY_API = 'https://script.google.com/macros/s/AKfycbxwrzF8av2VzyuAPjtA_bOyB-H6LvwLF6Cv_Ubq3P0rccsiXzUp3wIObxc23LQz7a5cig/exec';
 
 const guestGrid = document.querySelector('#guest-directory-grid');
-const guestListView = document.querySelector('#guest-list-view');
-const guestProfileView = document.querySelector('#guest-profile-view');
-const guestCount = document.querySelector('#guest-count');
-const guestBack = document.querySelector('#guest-back');
-const guestCache = new Map();
 
 function guestImageUrl(url) {
   if (!url) return '';
+  if (/^https?:\/\//i.test(url) === false) url = `https://${url}`;
+  const githubMatch = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/i);
+  if (githubMatch) return `https://raw.githubusercontent.com/${githubMatch[1]}/${githubMatch[2]}/${githubMatch[3]}/${githubMatch[4]}`;
   const driveMatch = url.match(/\/file\/d\/([a-zA-Z0-9-_]+)/) || url.match(/id=([a-zA-Z0-9-_]+)/);
   return driveMatch ? `https://drive.google.com/uc?export=view&id=${driveMatch[1]}` : url;
 }
@@ -17,87 +15,34 @@ function safeText(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 }
 
-function buildCard(guest, index) {
-  const card = document.createElement('button');
-  const name = safeText(guest.name || '이름 미등록');
-  const imageUrl = guestImageUrl(guest.img);
-  const label = guest.isNpc ? 'HOTEL RECORD / NPC' : `STAFF RECORD / ${String(index + 1).padStart(2, '0')}`;
-  card.type = 'button';
-  card.className = 'guest-record-card';
+function buildCard(staff, index) {
+  const card = document.createElement('article');
+  const name = safeText(staff.name || '이름 미등록');
+  // 현재 시트 구성: A열 이름, B열 이미지 링크, C열 직업.
+  // 기존 배포 코드가 B·C열을 hp·str로 반환하는 경우도 함께 처리한다.
+  const imageUrl = guestImageUrl(staff.img || staff.image || staff.hp);
+  const position = safeText(staff.position || staff.job || staff.role || staff.str || '직업 미정');
+
+  card.className = 'guest-record-card staff-public-card';
   card.innerHTML = `
-    <span class="guest-record-label">${label}</span>
+    <span class="guest-record-label">THEOBROMA STAFF / ${String(index + 1).padStart(2, '0')}</span>
     <span class="guest-record-image">${imageUrl ? `<img src="${safeText(imageUrl)}" alt="${name} 초상">` : '<span>STAFF<br>PORTRAIT</span>'}</span>
     <strong>${name}</strong>
-    <span class="guest-record-open">RECORD OPEN <i>↗</i></span>`;
-  card.addEventListener('click', () => openGuestProfile(guest.name));
+    <span class="staff-record-position">${position}</span>`;
   return card;
 }
 
-function showList() {
-  guestProfileView.hidden = true;
-  guestListView.hidden = false;
-  if (location.hash === '#profile') history.replaceState({}, '', location.pathname);
-}
-
-function setProfilePortrait(guest) {
-  const portrait = document.querySelector('#guest-profile-portrait');
-  const imageUrl = guestImageUrl(guest.img);
-  portrait.innerHTML = imageUrl ? `<img src="${safeText(imageUrl)}" alt="${safeText(guest.name)} 초상">` : '<span>STAFF<br>PORTRAIT</span>';
-}
-
-function applyImportedDocument(html) {
-  const parser = new DOMParser();
-  const documentFragment = parser.parseFromString(html || '', 'text/html');
-  documentFragment.querySelectorAll('script, iframe, object, embed, form, input, button, style, link, meta').forEach((element) => element.remove());
-  documentFragment.querySelectorAll('*').forEach((element) => {
-    [...element.attributes].forEach((attribute) => {
-      if (attribute.name.startsWith('on') || attribute.name === 'style' || attribute.name === 'class') element.removeAttribute(attribute.name);
-      if ((attribute.name === 'href' || attribute.name === 'src') && /^javascript:/i.test(attribute.value)) element.removeAttribute(attribute.name);
-    });
-  });
-  return documentFragment.body.innerHTML || '<p>등록된 상세 기록이 없습니다.</p>';
-}
-
-async function openGuestProfile(name) {
-  const guest = guestCache.get(name);
-  if (!guest) return;
-  guestListView.hidden = true;
-  guestProfileView.hidden = false;
-  document.querySelector('#guest-profile-name').textContent = guest.name || '이름 미등록';
-  document.querySelector('#guest-profile-type').textContent = guest.isNpc ? 'HOTEL RECORD / NPC' : 'THEOBROMA / STAFF RECORD';
-  setProfilePortrait(guest);
-  const documentPanel = document.querySelector('#guest-profile-document');
-  documentPanel.innerHTML = '<p class="guest-document-loading">기록을 불러오는 중입니다.</p>';
-  history.pushState({ view: 'guest-profile', name }, '', '#profile');
-  guestProfileView.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  try {
-    const response = await fetch(`${GUEST_DIRECTORY_API}?action=detail&name=${encodeURIComponent(name)}`, { redirect: 'follow' });
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
-    if (!data.success) throw new Error('상세 기록을 불러오지 못했습니다.');
-    documentPanel.innerHTML = applyImportedDocument(data.html);
-  } catch (error) {
-    documentPanel.innerHTML = `<p class="guest-document-error">${safeText(error.message || '상세 기록을 불러오지 못했습니다.')}</p>`;
-  }
-}
-
-async function loadGuestDirectory() {
+async function loadStaffDirectory() {
   try {
     const response = await fetch(`${GUEST_DIRECTORY_API}?action=list`, { redirect: 'follow' });
     const data = await response.json();
     if (!data.success || !Array.isArray(data.list) || data.list.length === 0) throw new Error('등록된 직원 기록이 없습니다.');
+
     guestGrid.innerHTML = '';
-    data.list.forEach((guest, index) => {
-      guestCache.set(guest.name, guest);
-      guestGrid.append(buildCard(guest, index));
-    });
-    guestCount.textContent = `STAFF RECORDS / ${String(data.list.length).padStart(2, '0')}`;
+    data.list.forEach((staff, index) => guestGrid.append(buildCard(staff, index)));
   } catch (error) {
     guestGrid.innerHTML = `<p class="directory-error">${safeText(error.message || '직원 기록을 불러오지 못했습니다.')}</p>`;
-    guestCount.textContent = 'STAFF RECORDS / ERROR';
   }
 }
 
-guestBack?.addEventListener('click', showList);
-window.addEventListener('popstate', () => { if (location.hash !== '#profile') showList(); });
-loadGuestDirectory();
+loadStaffDirectory();
